@@ -1,4 +1,5 @@
 import os
+import subprocess
 import sys
 from astropy.io import ascii
 #import corner
@@ -8,7 +9,7 @@ import shutil
 import bigplanet as bp
 import json
 import copy
-from scipy.stats import ks_2samp  
+from scipy.stats import ks_2samp
 from scipy.special import kl_div
 #import matplotlib.pyplot as plt
 #import vspace
@@ -289,8 +290,8 @@ def vconverge(vcnvFile):
 		converge_dict[i] = []
 
 	#Run Vspace on OG
-	os.system('vspace -f '+str(vspFile))
-	os.system('multiplanet -q '+str(vspFile))
+	subprocess.run(['vspace', '-f', str(vspFile)], check=True)
+	subprocess.run(['multiplanet', '-q', str(vspFile)], check=True)
 	#Run Multi-planet on OG
 	RunIndex = 1
 	predefpriors_used = create_tmp_vspin(vspFile, RunIndex, StepSize) # Make the temporary vspace file
@@ -339,8 +340,8 @@ def vconverge(vcnvFile):
 
 		# Run Vspace
 		# Run Multi-planet
-		os.system('vspace -f vconverge_tmp/vspace_tmp.in')
-		os.system('multiplanet -q vconverge_tmp/vspace_tmp.in')
+		subprocess.run(['vspace', '-f', 'vconverge_tmp/vspace_tmp.in'], check=True)
+		subprocess.run(['multiplanet', '-q', 'vconverge_tmp/vspace_tmp.in'], check=True)
 
 		sStepDir = 'vconverge_tmp/Step_' + str(RunIndex)
 		iStepSuccess, iStepFailed = ftParseLogFiles(sStepDir, vplanet_logfile, body, variable, finit, params_to_conv, converge_dict, sDestDir=dst_fold)
