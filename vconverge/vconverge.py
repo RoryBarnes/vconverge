@@ -62,30 +62,24 @@ def extract_info_vsp(vspFile): # Extracts relevant info from vspace.in file for 
 	for i in range(len(linesog)):
 		if linesog[i].split() == []:
 			pass
-		#elif linesog[i].split()[0] == 'srcfolder': # Old Syntax, before backwards compatibility break
-		elif linesog[i].split()[0] == 'sSrcFolder': # Code will want to know source folder
+		elif linesog[i].split()[0] in ('srcfolder', 'sSrcFolder'):
 			if linesog[i].split()[1] == '.': # Current working dir is srcfolder, get full path for vspacetmp srcfolder
 				source_fold = os.getcwd()
 			else:
 				source_fold = linesog[i].split()[1]
-		#elif linesog[i].split()[0] == 'destfolder': # Old Syntax, before backwards compatibility break
-		elif linesog[i].split()[0] == 'sDestFolder': # Code will want to know dest folder
+		elif linesog[i].split()[0] in ('destfolder', 'sDestFolder'):
 			dest_fold = linesog[i].split()[1]
-		#elif linesog[i].split()[0] == 'samplemode': # Old Syntax, before backwards compatibility break
-		elif linesog[i].split()[0] == 'sSampleMode': # If sample mode isn't random lets stop now
+		elif linesog[i].split()[0] in ('samplemode', 'sSampleMode'):
 			modename = linesog[i].split()[1]
 			if modename.startswith('r') or modename.startswith('R'):
 				mode = 'random'
 			else:
 				raise IOError('vconverge is currently only compatible with random mode')
-		#elif linesog[i].split()[0] == 'randsize': # Old Syntax, before backwards compatibility break
-		elif linesog[i].split()[0] == 'iNumTrials': 
+		elif linesog[i].split()[0] in ('randsize', 'iNumTrials'):
 			initial_sim_size = int(linesog[i].split()[1])
-		#elif linesog[i].split()[0] == 'trialname': # Old Syntax, before backwards compatibility break
-		elif linesog[i].split()[0] == 'sTrialName': 
+		elif linesog[i].split()[0] in ('trialname', 'sTrialName'):
 			triname = linesog[i].split()[1]
-		#elif linesog[i].split()[0] == 'file' or linesog[i].split()[0] == 'sPrimaryFile': # Old Syntax, before backwards compatibility break
-		elif linesog[i].split()[0] == 'sBodyFile' or linesog[i].split()[0] == 'sPrimaryFile': # Set the current file in case we need to append var names for predefined prior mode
+		elif linesog[i].split()[0] in ('file', 'sBodyFile', 'sPrimaryFile'):
 			curr_fi = linesog[i].split()[1]
 			curr_fi = curr_fi.split('.')[0]
 			if linesog[i].split()[0] == 'sPrimaryFile':
@@ -103,15 +97,15 @@ def create_tmp_vspin(vspFile, RunIndex, stepsize): # Creates a temporary vspace.
 	for i in range(len(linesog)):
 		if linesog[i].split() == []:
 			pass
-		#elif linesog[i].split()[0] == 'destfolder': # Old Syntax, before backwards compatibility break
-		elif linesog[i].split()[0] == 'sDestFolder': # Destination folder needs to be in vconverge_tmp, unique runs will be copied into OG destfolder
-			vsptmp.write('sDestFolder vconverge_tmp/Step_'+str(RunIndex)+'\n')
-		#elif linesog[i].split()[0] == 'trialname': # Old Syntax, before backwards compatibility break
-		elif linesog[i].split()[0] == 'sTrialName': # Trial name must be unique to not overwrite any data during copy
-			vsptmp.write('sTrialName Step'+str(RunIndex)+'_'+linesog[i].split()[1]+'\n')
-		#elif linesog[i].split()[0] == 'randsize': # Old Syntax, before backwards compatibility break
-		elif linesog[i].split()[0] == 'iNumTrials': 
-			vsptmp.write('iNumTrials '+str(stepsize)+'\n')
+		elif linesog[i].split()[0] in ('destfolder', 'sDestFolder'):
+			sKeyword = linesog[i].split()[0]
+			vsptmp.write(sKeyword+' vconverge_tmp/Step_'+str(RunIndex)+'\n')
+		elif linesog[i].split()[0] in ('trialname', 'sTrialName'):
+			sKeyword = linesog[i].split()[0]
+			vsptmp.write(sKeyword+' Step'+str(RunIndex)+'_'+linesog[i].split()[1]+'\n')
+		elif linesog[i].split()[0] in ('randsize', 'iNumTrials'):
+			sKeyword = linesog[i].split()[0]
+			vsptmp.write(sKeyword+' '+str(stepsize)+'\n')
 		elif re.search("\[", linesog[i]) != None: # look for predefined prior files, change to tmp name
 			spl = re.split("[\[\]]", linesog[i])
 			var = spl[0].strip() # Current variable
@@ -157,8 +151,84 @@ def create_tmp_prior_files(RunIndex, og_triname, dst_fold): # Create new prior f
 			else:
 				ascii.write(priorfi, 'vconverge_tmp/'+finame, format='fixed_width', delimiter=' ', overwrite=True)
 
+def fbCheckLogFileComplete(sLogFilePath):
+	with open(sLogFilePath, 'r') as logFile:
+		for sLine in logFile:
+			if len(sLine.split()) > 2 and sLine.split()[1] == 'FINAL':
+				return True
+	return False
+
+def flistReadValidLogFile(sLogPath):
+	if not fbCheckLogFileComplete(sLogPath):
+		raise IOError('Incomplete log file (no FINAL section)')
+	with open(sLogPath, 'r') as logHandle:
+		return logHandle.readlines()
+
+def fiMatchBodyAndFinitIndex(daBody, daFinit, sCurrentBody, sFinitHold, daIndex):
+	daBodyAtIndex = daBody[daIndex]
+	daFinitAtIndex = daFinit[daIndex]
+	if sCurrentBody not in daBodyAtIndex or sFinitHold not in daFinitAtIndex:
+		return None
+	daBodyMatches = np.where(daBodyAtIndex == sCurrentBody)[0]
+	daFinitMatches = np.where(daFinitAtIndex == sFinitHold)[0]
+	for iBodyMatch in daBodyMatches:
+		for iFinitMatch in daFinitMatches:
+			if iBodyMatch == iFinitMatch:
+				return iBodyMatch
+	return None
+
+def fnExtractConvergenceValues(listLines, daBody, daVariable, daFinit, listParamsToConverge, dictConverge):
+	sFinitHold = None
+	sCurrentBody = None
+	for i in range(len(listLines)):
+		if len(listLines[i].split()) <= 2:
+			continue
+		if listLines[i].split()[1] == 'FINAL':
+			sFinitHold = 'final'
+		elif listLines[i].split()[1] == 'INITIAL':
+			sFinitHold = 'initial'
+		elif listLines[i].split()[1] == 'BODY:':
+			sCurrentBody = listLines[i].split()[2]
+		elif listLines[i].split()[0] in daVariable:
+			daIndex = np.where(daVariable == listLines[i].split()[0])[0]
+			iTrueIndex = fiMatchBodyAndFinitIndex(daBody, daFinit, sCurrentBody, sFinitHold, daIndex)
+			if iTrueIndex is not None:
+				sParamKey = np.array(listParamsToConverge)[daIndex][iTrueIndex]
+				dictConverge[sParamKey].append(float(listLines[i].split()[-1]))
+
+def ftParseLogFiles(sBaseDir, sLogFile, daBody, daVariable, daFinit, listParams, dictConverge, sDestDir=None):
+	iSuccessCount = 0
+	iFailedCount = 0
+	for sSubdir, listDirs, listFiles in os.walk(sBaseDir):
+		if sSubdir == sBaseDir:
+			continue
+		sLogPath = os.path.join(sSubdir, sLogFile)
+		sSimName = os.path.basename(sSubdir)
+		try:
+			listLines = flistReadValidLogFile(sLogPath)
+		except (FileNotFoundError, IOError) as error:
+			print('WARNING: Skipping %s: %s' % (sSimName, str(error)))
+			iFailedCount += 1
+			continue
+		if sDestDir is not None:
+			shutil.copytree(sSubdir, os.path.join(sDestDir, sSimName))
+		fnExtractConvergenceValues(listLines, daBody, daVariable, daFinit, listParams, dictConverge)
+		iSuccessCount += 1
+	return (iSuccessCount, iFailedCount)
+
+def fnCheckFailureRate(iSuccessCount, iFailedCount, sStepDescription):
+	iTotal = iSuccessCount + iFailedCount
+	if iTotal == 0:
+		raise IOError('No simulations found in %s' % sStepDescription)
+	dFailureRate = iFailedCount / iTotal
+	if dFailureRate > 0.5:
+		raise IOError(
+			'More than 50%% of vplanet simulations failed in %s '
+			'(%d of %d). Check input files and model configuration.'
+			% (sStepDescription, iFailedCount, iTotal))
+	print('%s: %d succeeded, %d failed' % (sStepDescription, iSuccessCount, iFailedCount))
+
 def vconverge(vcnvFile):
-	print('in the function')
 	# make the temporary directory
 	if os.path.exists('vconverge_tmp'):
 		shutil.rmtree('vconverge_tmp')
@@ -219,10 +289,8 @@ def vconverge(vcnvFile):
 		converge_dict[i] = []
 
 	#Run Vspace on OG
-	os.system('python -m vspace '+str(vspFile))
-	#os.system('multi-planet '+str(vspFile))
-	#vspace vspFile
-	os.system('python -m multiplanet '+str(vspFile))
+	os.system('vspace -f '+str(vspFile))
+	os.system('multiplanet -q '+str(vspFile))
 	#Run Multi-planet on OG
 	RunIndex = 1
 	predefpriors_used = create_tmp_vspin(vspFile, RunIndex, StepSize) # Make the temporary vspace file
@@ -242,46 +310,15 @@ def vconverge(vcnvFile):
 	variable = np.array(variable)
 	finit = np.array(finit)
 
-	for subdir, dirs, files in os.walk(dst_fold): # Loop through all the sims and extract info from each log
-		if subdir != dst_fold:
-			curr_file = open(os.path.join(subdir, vplanet_logfile), 'r')
-			curr_lines = curr_file.readlines()
-			curr_file.close()
-			finithold = None
-			currbody = None
-			for i in range(len(curr_lines)):
-				if len(curr_lines[i].split()) > 2:
-					if curr_lines[i].split()[1] == 'FINAL':
-						finithold = 'final'
-#						print(curr_lines[i].split()[1])
-					elif curr_lines[i].split()[1] == 'INITIAL':
-						finithold = 'initial'
-#						print(curr_lines[i].split()[1])
-					elif curr_lines[i].split()[1] == 'BODY:':
-						currbody = curr_lines[i].split()[2]
-#						print(currbody)
-					elif curr_lines[i].split()[0] in variable:
-#						index = variable.index(curr_lines[i].split()[0])
-						index = np.where(variable == curr_lines[i].split()[0])[0]
-						if currbody in body[index] and finithold in finit[index]:
-							bodyindex = np.where(body[index] == currbody)[0]
-							finitindex = np.where(finit[index] == finithold)[0]
-							trueindex = None
-							for g in bodyindex:
-#								print('g: ',g)
-								for h in finitindex:
-#									print('h: ',h)
-									if g == h:
-										trueindex = g
-							if trueindex is not None:
-#								print('body '+str(body[index][trueindex])+', variable '+str(variable[index][trueindex])+'_'+str(finit[index][trueindex])+' AKA '+str(curr_lines[i].split()[0]))
-#								print('In params_to_conv: '+str(np.array(params_to_conv)[index][trueindex]))
-								converge_dict[np.array(params_to_conv)[index][trueindex]].append(float(curr_lines[i].split()[len(curr_lines[i].split()) - 1]))
+	iSuccess, iFailed = ftParseLogFiles(dst_fold, vplanet_logfile, body, variable, finit, params_to_conv, converge_dict)
+	fnCheckFailureRate(iSuccess, iFailed, 'initial run')
 
-	# Check to make sure all requested parameters are real
 	for i in params_to_conv:
 		if converge_dict[i] == []:
-			raise IOError('%s is not being simulated by VPLanet, or is not a VPLanet recognizable parameter. Please check spelling, modules used, etc.' % i)
+			raise IOError(
+				'%s produced no values. %d of %d simulations failed. '
+				'Check parameter spelling, modules, and vplanet compatibility.'
+				% (i, iFailed, iSuccess + iFailed))
 
 	# --------------------------------------- LOOP START --------------------------------------------------
 	# At this point, the initial training set has been processed and recorded. Now the loop will begin systematically adding steps of simulations of size StepSize
@@ -302,46 +339,12 @@ def vconverge(vcnvFile):
 
 		# Run Vspace
 		# Run Multi-planet
-		os.system('python -m vspace vconverge_tmp/vspace_tmp.in')
-		#os.system('multi-planet vconverge_tmp/vspace_tmp.in')
-		os.system('python -m multiplanet vconverge_tmp/vspace_tmp.in')
+		os.system('vspace -f vconverge_tmp/vspace_tmp.in')
+		os.system('multiplanet -q vconverge_tmp/vspace_tmp.in')
 
-		# Go through sims on this step and append to the running list of values (converge_dict)
-		for subdir, dirs, files in os.walk('vconverge_tmp/Step_'+str(RunIndex)): # Loop through all the sims and extract info from each log
-			if subdir != 'vconverge_tmp/Step_'+str(RunIndex):
-				shutil.copytree(subdir, os.path.join(dst_fold, subdir.split('/')[len(subdir.split('/'))-1])) # Copy sim into user defined dest folder so they have the data after tmp files are deleted
-				curr_file = open(os.path.join(subdir, vplanet_logfile), 'r')
-				curr_lines = curr_file.readlines()
-				curr_file.close()
-				finithold = None
-				currbody = None
-				for i in range(len(curr_lines)):
-					if len(curr_lines[i].split()) > 2:
-						if curr_lines[i].split()[1] == 'FINAL':
-							finithold = 'final'
-#							print(curr_lines[i].split()[1])
-						elif curr_lines[i].split()[1] == 'INITIAL':
-							finithold = 'initial'
-#							print(curr_lines[i].split()[1])
-						elif curr_lines[i].split()[1] == 'BODY:':
-							currbody = curr_lines[i].split()[2]
-#							print(currbody)
-						elif curr_lines[i].split()[0] in variable:
-							index = np.where(variable == curr_lines[i].split()[0])[0]
-							if currbody in body[index] and finithold in finit[index]:
-								bodyindex = np.where(body[index] == currbody)[0]
-								finitindex = np.where(finit[index] == finithold)[0]
-								trueindex = None
-								for g in bodyindex:
-#									print('g: ',g)
-									for h in finitindex:
-#										print('h: ',h)
-										if g == h:
-											trueindex = g
-								if trueindex is not None:
-#									print('body '+str(body[index][trueindex])+', variable '+str(variable[index][trueindex])+'_'+str(finit[index][trueindex])+' AKA '+str(curr_lines[i].split()[0]))
-#									print('In params_to_conv: '+str(np.array(params_to_conv)[index][trueindex]))
-									converge_dict[np.array(params_to_conv)[index][trueindex]].append(float(curr_lines[i].split()[len(curr_lines[i].split()) - 1]))
+		sStepDir = 'vconverge_tmp/Step_' + str(RunIndex)
+		iStepSuccess, iStepFailed = ftParseLogFiles(sStepDir, vplanet_logfile, body, variable, finit, params_to_conv, converge_dict, sDestDir=dst_fold)
+		fnCheckFailureRate(iStepSuccess, iStepFailed, 'step %d' % RunIndex)
 		if ConvMethod == 'KL_Quantiles':
 			curr_quant = {} # get current quantiles, after step has been taken
 			for i in params_to_conv:
@@ -471,4 +474,11 @@ def vconverge(vcnvFile):
 	return converge_dict, converged
 
 
-cdic, conved = vconverge(sys.argv[1])
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: vconverge <input_file>")
+        sys.exit(1)
+    vconverge(sys.argv[1])
+
+if __name__ == "__main__":
+    main()
