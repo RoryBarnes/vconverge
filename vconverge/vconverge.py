@@ -230,9 +230,11 @@ def fnCheckFailureRate(iSuccessCount, iFailedCount, sStepDescription):
 	print('%s: %d succeeded, %d failed' % (sStepDescription, iSuccessCount, iFailedCount))
 
 def vconverge(vcnvFile):
-	# make the temporary directory
+	# make the temporary directory and remove stale checkpoints
 	if os.path.exists('vconverge_tmp'):
 		shutil.rmtree('vconverge_tmp')
+	if os.path.exists('.vconverge_tmp'):
+		shutil.rmtree('.vconverge_tmp')
 	os.mkdir('vconverge_tmp')
 
 	# extract required info from the vconverge.in file and the vspace.in file respectively
@@ -291,7 +293,7 @@ def vconverge(vcnvFile):
 
 	#Run Vspace on OG
 	subprocess.run(['vspace', '-f', str(vspFile)], check=True)
-	subprocess.run(['multiplanet', '-q', str(vspFile)], check=True)
+	subprocess.run(['multiplanet', '-q', '-f', str(vspFile)], check=True)
 	#Run Multi-planet on OG
 	RunIndex = 1
 	predefpriors_used = create_tmp_vspin(vspFile, RunIndex, StepSize) # Make the temporary vspace file
@@ -341,7 +343,7 @@ def vconverge(vcnvFile):
 		# Run Vspace
 		# Run Multi-planet
 		subprocess.run(['vspace', '-f', 'vconverge_tmp/vspace_tmp.in'], check=True)
-		subprocess.run(['multiplanet', '-q', 'vconverge_tmp/vspace_tmp.in'], check=True)
+		subprocess.run(['multiplanet', '-q', '-f', 'vconverge_tmp/vspace_tmp.in'], check=True)
 
 		sStepDir = 'vconverge_tmp/Step_' + str(RunIndex)
 		iStepSuccess, iStepFailed = ftParseLogFiles(sStepDir, vplanet_logfile, body, variable, finit, params_to_conv, converge_dict, sDestDir=dst_fold)
