@@ -21,7 +21,6 @@ setup(
     install_requires=[
         "numpy",
         "matplotlib",
-        "argparse",
         "astropy"
     ],
     entry_points={
