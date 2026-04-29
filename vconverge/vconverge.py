@@ -22,6 +22,7 @@ def extract_info_vcnv(vcnvFile):
 	params_to_conv = []
 	hold = []
 	sConvergenceMethod = 'KL'
+	iBaseSeed = None
 	for i in range(len(lines)):
 		if lines[i].split() == []:
 			pass
@@ -37,6 +38,10 @@ def extract_info_vcnv(vcnvFile):
 			ConvCondit = float(lines[i].split()[1])
 		elif lines[i].split()[0] == 'iNumberOfConvergences':
 			ConvNum = int(lines[i].split()[1])
+		elif lines[i].split()[0] in ('iSeed', 'seed'):
+			if not float(lines[i].split()[1]).is_integer():
+				raise IOError('iSeed in %s must be an integer; got %s' % (vcnvFile, lines[i].split()[1]))
+			iBaseSeed = int(lines[i].split()[1])
 		elif lines[i].split()[0] == 'sObjectFile':
 			if hold != [] and len(hold) > 1:
 				params_to_conv.append(hold)
@@ -54,7 +59,7 @@ def extract_info_vcnv(vcnvFile):
 	if hold != [] and len(hold) > 1:
 		params_to_conv.append(hold)
 
-	return vspFi, StepSize, MaxSteps, ConvMethod, ConvCondit, ConvNum, params_to_conv
+	return vspFi, StepSize, MaxSteps, ConvMethod, ConvCondit, ConvNum, params_to_conv, iBaseSeed
 
 def extract_info_vsp(vspFile): # Extracts relevant info from vspace.in file for vconverge including srcfolder, destfolder, and predefined prior file info (if applicable)
 	vspog = open(vspFile, 'r')
@@ -89,7 +94,22 @@ def extract_info_vsp(vspFile): # Extracts relevant info from vspace.in file for 
 	return source_fold, dest_fold, triname, PrimeFi, initial_sim_size#, prior_files, prior_vars, prior_vars_cols
 			
 
-def create_tmp_vspin(vspFile, RunIndex, stepsize): # Creates a temporary vspace.in file to run for steps subsequent to original run
+def fnInjectSeedIntoVspaceFile(sInputPath, sOutputPath, iSeed): # Copy a vspace.in to a new path, stripping any iSeed/seed lines and appending iSeed <iSeed>.
+	vspog = open(sInputPath, 'r')
+	linesog = vspog.readlines()
+	vspog.close()
+	vsptmp = open(sOutputPath, 'w')
+	for i in range(len(linesog)):
+		if linesog[i].split() == []:
+			vsptmp.write(linesog[i])
+		elif linesog[i].split()[0] in ('iSeed', 'seed'):
+			continue
+		else:
+			vsptmp.write(linesog[i])
+	vsptmp.write('iSeed '+str(int(iSeed))+'\n')
+	vsptmp.close()
+
+def create_tmp_vspin(vspFile, RunIndex, stepsize, iBaseSeed=None): # Creates a temporary vspace.in file to run for steps subsequent to original run
 	vspog = open(vspFile, 'r') # Read in original (og) vspace file provided as input by user
 	linesog = vspog.readlines()
 	vspog.close()
@@ -98,6 +118,8 @@ def create_tmp_vspin(vspFile, RunIndex, stepsize): # Creates a temporary vspace.
 	for i in range(len(linesog)):
 		if linesog[i].split() == []:
 			pass
+		elif linesog[i].split()[0] in ('iSeed', 'seed'):
+			continue # vconverge owns the seed; skip any user-provided value in vspace.in
 		elif linesog[i].split()[0] in ('destfolder', 'sDestFolder'):
 			sKeyword = linesog[i].split()[0]
 			vsptmp.write(sKeyword+' vconverge_tmp/Step_'+str(RunIndex)+'\n')
@@ -123,6 +145,8 @@ def create_tmp_vspin(vspFile, RunIndex, stepsize): # Creates a temporary vspace.
 				vsptmp.write(linesog[i]+'\n')
 		else:
 			vsptmp.write(linesog[i]+'\n')
+	if iBaseSeed is not None:
+		vsptmp.write('iSeed '+str(int(iBaseSeed) + int(RunIndex))+'\n')
 	vsptmp.close()
 	return predefpriors_used
 
@@ -200,7 +224,7 @@ def fnExtractConvergenceValues(listLines, daBody, daVariable, daFinit, listParam
 def ftParseLogFiles(sBaseDir, sLogFile, daBody, daVariable, daFinit, listParams, dictConverge, sDestDir=None):
 	iSuccessCount = 0
 	iFailedCount = 0
-	for sSubdir, listDirs, listFiles in os.walk(sBaseDir):
+	for sSubdir, listDirs, listFiles in sorted(os.walk(sBaseDir), key=lambda t: t[0]):
 		if sSubdir == sBaseDir:
 			continue
 		sLogPath = os.path.join(sSubdir, sLogFile)
@@ -238,7 +262,7 @@ def vconverge(vcnvFile):
 	os.mkdir('vconverge_tmp')
 
 	# extract required info from the vconverge.in file and the vspace.in file respectively
-	vspFile, StepSize, MaxSteps, ConvMethod, ConvCondit, ConvNum, params_to_conv = extract_info_vcnv(vcnvFile)
+	vspFile, StepSize, MaxSteps, ConvMethod, ConvCondit, ConvNum, params_to_conv, iBaseSeed = extract_info_vcnv(vcnvFile)
 #	src_fold, dst_fold, og_triname, primeFi, pfiles, pvars, pvarscols = extract_info_vsp(vspFile)
 	src_fold, dst_fold, og_triname, primeFi, initialsims = extract_info_vsp(vspFile)
 
@@ -292,11 +316,16 @@ def vconverge(vcnvFile):
 		converge_dict[i] = []
 
 	#Run Vspace on OG
-	subprocess.run(['vspace', '-f', str(vspFile)], check=True)
-	subprocess.run(['multiplanet', '-q', '-f', str(vspFile)], check=True)
+	if iBaseSeed is not None:
+		fnInjectSeedIntoVspaceFile(vspFile, 'vconverge_tmp/vspace_init.in', iBaseSeed)
+		subprocess.run(['vspace', '-f', 'vconverge_tmp/vspace_init.in'], check=True)
+		subprocess.run(['multiplanet', '-q', '-f', 'vconverge_tmp/vspace_init.in'], check=True)
+	else:
+		subprocess.run(['vspace', '-f', str(vspFile)], check=True)
+		subprocess.run(['multiplanet', '-q', '-f', str(vspFile)], check=True)
 	#Run Multi-planet on OG
 	RunIndex = 1
-	predefpriors_used = create_tmp_vspin(vspFile, RunIndex, StepSize) # Make the temporary vspace file
+	predefpriors_used = create_tmp_vspin(vspFile, RunIndex, StepSize, iBaseSeed=iBaseSeed) # Make the temporary vspace file
 	if predefpriors_used == True:
 		create_tmp_prior_files(RunIndex, og_triname, dst_fold) # Make the temporary prior files
 
@@ -396,7 +425,7 @@ def vconverge(vcnvFile):
 		RunIndex = RunIndex + 1
 
 		# Create new vspace.in and prior files
-		predefpriors_used = create_tmp_vspin(vspFile, RunIndex, StepSize) # Make the temporary vspace file
+		predefpriors_used = create_tmp_vspin(vspFile, RunIndex, StepSize, iBaseSeed=iBaseSeed) # Make the temporary vspace file
 		if predefpriors_used == True:
 			create_tmp_prior_files(RunIndex, og_triname, 'vconverge_tmp') # Make the temporary prior files
 
