@@ -94,11 +94,15 @@ def extract_info_vsp(vspFile): # Extracts relevant info from vspace.in file for 
 	return source_fold, dest_fold, triname, PrimeFi, initial_sim_size#, prior_files, prior_vars, prior_vars_cols
 			
 
-def fnInjectSeedIntoVspaceFile(sInputPath, sOutputPath, iSeed): # Copy a vspace.in to a new path, stripping any iSeed/seed lines and appending iSeed <iSeed>.
+def fnInjectSeedIntoVspaceFile(sInputPath, sOutputPath, iSeed): # Copy a vspace.in to a new path, stripping any iSeed/seed lines and prepending iSeed <iSeed> as a top-level directive.
 	vspog = open(sInputPath, 'r')
 	linesog = vspog.readlines()
 	vspog.close()
 	vsptmp = open(sOutputPath, 'w')
+	# iSeed must precede the first `file` block so vspace treats it as a
+	# global directive; lines after `file vpl.in` are otherwise written
+	# verbatim into each per-trial vpl.in (where vplanet rejects them).
+	vsptmp.write('iSeed '+str(int(iSeed))+'\n')
 	for i in range(len(linesog)):
 		if linesog[i].split() == []:
 			vsptmp.write(linesog[i])
@@ -106,7 +110,6 @@ def fnInjectSeedIntoVspaceFile(sInputPath, sOutputPath, iSeed): # Copy a vspace.
 			continue
 		else:
 			vsptmp.write(linesog[i])
-	vsptmp.write('iSeed '+str(int(iSeed))+'\n')
 	vsptmp.close()
 
 def create_tmp_vspin(vspFile, RunIndex, stepsize, iBaseSeed=None): # Creates a temporary vspace.in file to run for steps subsequent to original run
@@ -115,6 +118,11 @@ def create_tmp_vspin(vspFile, RunIndex, stepsize, iBaseSeed=None): # Creates a t
 	vspog.close()
 	predefpriors_used = False
 	vsptmp = open('vconverge_tmp/vspace_tmp.in', 'w') # Create new temp vspace file in vconverge tmp directory
+	if iBaseSeed is not None:
+		# iSeed must precede the first `file` block so vspace treats it
+		# as a global directive (otherwise it leaks into per-trial vpl.in
+		# and vplanet errors out with "Unrecognized option iSeed").
+		vsptmp.write('iSeed '+str(int(iBaseSeed) + int(RunIndex))+'\n')
 	for i in range(len(linesog)):
 		if linesog[i].split() == []:
 			pass
@@ -145,8 +153,6 @@ def create_tmp_vspin(vspFile, RunIndex, stepsize, iBaseSeed=None): # Creates a t
 				vsptmp.write(linesog[i]+'\n')
 		else:
 			vsptmp.write(linesog[i]+'\n')
-	if iBaseSeed is not None:
-		vsptmp.write('iSeed '+str(int(iBaseSeed) + int(RunIndex))+'\n')
 	vsptmp.close()
 	return predefpriors_used
 
