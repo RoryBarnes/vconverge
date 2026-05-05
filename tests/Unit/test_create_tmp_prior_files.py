@@ -11,12 +11,7 @@ from astropy.table import Table
 
 from vconverge.vconverge import create_tmp_prior_files
 
-
-def fnPrepareTmpDirectory(sChdirPath):
-    """Make sure vconverge_tmp/ exists before the function writes to it."""
-    sTmp = os.path.join(sChdirPath, "vconverge_tmp")
-    if not os.path.isdir(sTmp):
-        os.makedirs(sTmp)
+from .conftest import fnPrepareTmpDirectory
 
 
 def fnWritePriorIndiciesJson(sPath, dictPriors):

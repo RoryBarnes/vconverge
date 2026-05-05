@@ -1,23 +1,13 @@
 """Unit tests for extract_info_vcnv and extract_info_vsp."""
 
 import os
-import textwrap
 
 import pytest
 
 from vconverge.vconverge import extract_info_vcnv, extract_info_vsp
 
-
-def fnBuildVcnv(sPath, sContent):
-    """Write a .vcnv file with dedented content."""
-    with open(sPath, "w") as fileHandle:
-        fileHandle.write(textwrap.dedent(sContent).lstrip("\n"))
-
-
-def fnBuildVsp(sPath, sContent):
-    """Write a vspace.in file with dedented content."""
-    with open(sPath, "w") as fileHandle:
-        fileHandle.write(textwrap.dedent(sContent).lstrip("\n"))
+from .conftest import fnWriteText as fnBuildVcnv
+from .conftest import fnWriteVspaceInputFile as fnBuildVsp
 
 
 def test_extract_info_vcnv_full_block(tmp_path):

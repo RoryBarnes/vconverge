@@ -1,14 +1,8 @@
 """Unit tests for fnInjectSeedIntoVspaceFile."""
 
-import textwrap
-
 from vconverge.vconverge import fnInjectSeedIntoVspaceFile
 
-
-def fnWriteVspace(sPath, sContent):
-    """Write a vspace.in file with dedented content."""
-    with open(sPath, "w") as fileHandle:
-        fileHandle.write(textwrap.dedent(sContent).lstrip("\n"))
+from .conftest import fnWriteVspaceInputFile as fnWriteVspace
 
 
 def flistReadAll(sPath):

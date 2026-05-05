@@ -1,24 +1,10 @@
 """Unit tests for create_tmp_vspin."""
 
-import os
-import textwrap
-
 import pytest
 
 from vconverge.vconverge import create_tmp_vspin
 
-
-def fnWriteVspace(sPath, sContent):
-    """Write a vspace.in file with dedented content."""
-    with open(sPath, "w") as fileHandle:
-        fileHandle.write(textwrap.dedent(sContent).lstrip("\n"))
-
-
-def fnPrepareTmpDirectory(sChdirPath):
-    """Make sure vconverge_tmp/ exists in the cwd, since create_tmp_vspin writes there."""
-    sTmp = os.path.join(sChdirPath, "vconverge_tmp")
-    if not os.path.isdir(sTmp):
-        os.makedirs(sTmp)
+from .conftest import fnPrepareTmpDirectory, fnWriteVspaceInputFile as fnWriteVspace
 
 
 def test_create_tmp_vspin_legacy_keywords(tmp_path, monkeypatch):

@@ -1,8 +1,11 @@
-"""Shared fixtures for vconverge unit tests.
+"""Shared fixtures and helpers for vconverge unit tests.
 
-These fixtures build small in-memory inputs (vconverge `.in` files,
-vspace `.in` files, body files, vplanet log files) that the unit
-tests below reuse. Keeping them here keeps each test file short.
+The plain functions defined here (e.g. fnPrepareTmpDirectory,
+fnWriteVspaceInputFile) are imported directly by individual test
+modules via `from .conftest import ...`.  The `@pytest.fixture`
+helpers below are auto-injected by pytest when a test names them
+as an argument.  Keeping both kinds in one file removes duplication
+across the unit-test suite.
 """
 
 import os
@@ -12,9 +15,20 @@ import pytest
 
 
 def fnWriteText(sPath, sContent):
-    """Write a text file (helper used by many fixtures)."""
+    """Write a text file with leading whitespace dedented."""
     with open(sPath, "w") as fileHandle:
         fileHandle.write(textwrap.dedent(sContent).lstrip("\n"))
+
+
+def fnWriteVspaceInputFile(sPath, sContent):
+    """Write a vspace.in file with dedented content."""
+    fnWriteText(sPath, sContent)
+
+
+def fnPrepareTmpDirectory(sChdirPath):
+    """Ensure vconverge_tmp/ exists below sChdirPath before a write."""
+    sTmp = os.path.join(sChdirPath, "vconverge_tmp")
+    os.makedirs(sTmp, exist_ok=True)
 
 
 @pytest.fixture
