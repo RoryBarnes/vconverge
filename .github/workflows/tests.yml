@@ -25,12 +25,19 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
 
-      - name: Install VPLanet
+      - name: Install VPLanet stack
         run: |
           python -m pip install --upgrade pip
-          # vconverge calls vplanet, vspace, multiplanet, and bigplanet as
-          # subprocesses; install the public PyPI releases of each.
-          python -m pip install vplanet vspace multiplanet bigplanet
+          # vplanet ships a precompiled wheel on PyPI; install from there.
+          python -m pip install vplanet
+          # vspace, multi-planet, and bigplanet on PyPI are old releases that
+          # diverge from the development branches vconverge is built against.
+          # Install each from the @main branch of its dev repo so the integration
+          # tests exercise the same APIs vconverge actually targets.
+          python -m pip install \
+            "vspace @ git+https://github.com/VirtualPlanetaryLaboratory/vspace.git@main" \
+            "multiplanet @ git+https://github.com/VirtualPlanetaryLaboratory/multi-planet.git@main" \
+            "bigplanet @ git+https://github.com/VirtualPlanetaryLaboratory/bigplanet.git@main"
 
       - name: Install vconverge
         run: |
