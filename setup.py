@@ -21,7 +21,11 @@ setup(
     install_requires=[
         "numpy",
         "matplotlib",
-        "astropy"
+        "astropy",
+        "scipy",
+        "bigplanet",
+        "vspace",
+        "multiplanet",
     ],
     entry_points={
         "console_scripts": [
