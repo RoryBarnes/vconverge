@@ -70,12 +70,18 @@ jobs:
       - name: Combine coverage data
         if: matrix.os == 'ubuntu-22.04' && matrix.python-version == '3.9'
         run: |
-          # Move all coverage files from subdirectories to repository root
+          # Integration tests run in-process so pytest's --cov-report=xml step
+          # already emits coverage.xml. Subprocess .coverage.<pid> files only
+          # appear when COVERAGE_PROCESS_START catches a child; merge them in
+          # if any exist, otherwise fall through to the existing coverage.xml.
           find tests/ -name ".coverage.*" -type f -exec mv {} . \; 2>/dev/null || true
-          # Combine all coverage data files
-          python -m coverage combine
-          python -m coverage xml
-          python -m coverage report
+          if compgen -G ".coverage.*" > /dev/null; then
+            python -m coverage combine
+            python -m coverage xml
+            python -m coverage report
+          else
+            python -m coverage report
+          fi
 
       - name: Upload coverage to Codecov
         # Only upload from one runner to avoid redundant API calls
