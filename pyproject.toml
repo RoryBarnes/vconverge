@@ -14,6 +14,10 @@ dependencies = [
     "numpy",
     "matplotlib",
     "astropy",
+    "scipy",
+    "bigplanet",
+    "vspace",
+    "multiplanet",
 ]
 
 [project.scripts]
@@ -29,3 +33,20 @@ include-package-data = true
 [tool.setuptools_scm]
 write_to = "vconverge/vconverge_version.py"
 write_to_template = "__version__ = \"{version}\"\n"
+
+[tool.black]
+line-length = 79
+exclude = '''
+/(
+    \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+)/
+'''
